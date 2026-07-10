@@ -52,7 +52,7 @@
  .msg .replay{display:block; margin-top:6px; background:none; border:none; color:var(--accent); font-size:12.5px; padding:0; cursor:pointer;}
 
  footer{padding:10px 14px 14px; border-top:1px solid var(--line); background:var(--bg);}
- .row{display:flex; gap:10px; align-items:center; justify-content:center;}
+ .row{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;}
  #big{
  width:84px; height:84px; border-radius:50%; border:none; cursor:pointer;
  background:var(--accent); color:var(--accent-ink); font-size:34px;
@@ -76,7 +76,6 @@
  #camIn{display:none;}
  .thinking{align-self:flex-start; color:var(--accent); font-size:13px;}
 
- /* ---- painel inicial de autorização ---- */
  #setup{
  position:fixed; inset:0; background:var(--bg); z-index:50;
  display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -103,6 +102,25 @@
  font-size:16px; font-weight:600; padding:14px; cursor:pointer;
  }
  #btnEntrar:disabled{opacity:.35;}
+ #btnMicCfg{
+ margin-top:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink);
+ border-radius:10px; padding:8px 12px; font-size:12.5px; font-weight:600; cursor:pointer;
+ }
+ #micCfg{
+ position:fixed; inset:0; background:var(--bg); z-index:40; display:flex; flex-direction:column;
+ padding:calc(14px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+ gap:14px; overflow-y:auto;
+ }
+ #micCfg h2{margin:0; font-size:20px;}
+ #micCfg h2 span{color:var(--accent);}
+ #micCfg ol{margin:0; padding-left:20px; font-size:14px; color:var(--ink); line-height:1.65;}
+ #micCfg .dev{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 13px; font-size:13.5px; margin-top:6px;}
+ .vuWrap{background:var(--panel2); border:1px solid var(--line); border-radius:10px; height:16px; overflow:hidden; margin-top:10px;}
+ .vuBar{height:100%; width:0%; background:var(--accent); transition:width .08s linear;}
+ #micCfg .row2{display:flex; gap:10px; margin-top:4px;}
+ #micCfg .row2 button{flex:1;}
+ #micCfg .fechar{align-self:center; margin-top:auto; color:var(--dim); background:none; border:none; font-size:14px; padding:10px; cursor:pointer;}
+ #micLbl{font-size:12.5px; color:var(--dim); margin-top:4px;}
  #setupMsg{font-size:13px; color:var(--warn); min-height:18px; max-width:340px;}
 </style>
 </head>
@@ -122,13 +140,38 @@
 <header>
  <h1>Lente <span>· Claude nos seus óculos</span></h1>
  <div class="sub">Conecte os óculos por Bluetooth ao iPhone — o áudio passa por eles.</div>
+ <button id="btnMicCfg">🎚️ Configurar microfone</button>
+ <button id="btnKey" style="margin-top:10px;margin-left:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:600;cursor:pointer;">🔑 Chave da API</button>
 </header>
+
+<div id="micCfg" hidden>
+ <h2>🎚️ <span>Configurar microfone</span></h2>
+ <p style="color:var(--dim); font-size:13.5px; margin:0;">O app não consegue trocar o microfone sozinho — isso é feito pelo iPhone. Mas dá pra testar aqui se o certo já está ativo.</p>
+
+ <ol>
+ <li>Abra a Central de Controle (deslize do canto superior direito)</li>
+ <li>Toque e segure no cartão de áudio</li>
+ <li>Toque no ícone de rota de áudio e escolha seus óculos</li>
+ <li>Volte aqui e toque em "Testar microfone"</li>
+ </ol>
+
+ <div class="row2">
+ <button class="side" id="btnTestarMic">Testar microfone</button><button class="side" id="btnPararMic" hidden>Parar teste</button>
+ </div>
+ <div class="vuWrap"><div class="vuBar" id="vuBar"></div></div>
+ <div id="micLbl">Fale algo e afaste o celular — se a barra se mexer, o microfone certo está ativo.</div>
+
+ <div id="devList"></div>
+
+ <button class="fechar" id="btnFecharMic">Fechar</button>
+</div>
 
 <nav id="tabs">
  <button data-m="chat" class="on">💬 Conversar</button>
  <button data-m="trad">🌐 Traduzir voz</button>
  <button data-m="ouvir">👂 Ajudar a responder</button>
  <button data-m="cam">📷 Traduzir texto</button>
+ <button data-m="video">🎥 Traduzir vídeo</button>
 </nav>
 
 <div id="opts" hidden>
@@ -151,11 +194,13 @@
  <div class="row">
  <button class="side" id="clear">Limpar</button>
  <button id="big" aria-label="Falar">🎙️</button>
+ <button class="side" id="galeria" hidden>🖼️ Galeria</button>
  <button class="side" id="sugerir" hidden>Sugerir resposta</button>
  <button class="side" id="mudo">🔊 Voz</button>
  </div>
  <div id="hint">Toque no microfone e fale.</div>
  <input type="file" id="camIn" accept="image/*" capture="environment">
+ <input type="file" id="galIn" accept="image/*" style="display:none">
 </footer>
 
 <script>
@@ -163,6 +208,8 @@ const $=s=>document.querySelector(s);
 const log=$("#log"), big=$("#big"), hint=$("#hint");
 let mode="chat", falar=true, rec=null, gravando=false, ocupado=false;
 let historico=[], transcricao="";
+let manualStop=true;
+let filaVideo=[], processandoVideo=false;
 
 function add(cls, txt, langFala){
  const d=document.createElement("div");
@@ -177,21 +224,20 @@ function add(cls, txt, langFala){
 }
 function sys(t){ add("sys", t); }
 
-/* ---------- voz (saída) ---------- */
 let vozes=[];
 function carregaVozes(){ vozes=speechSynthesis.getVoices(); }
 carregaVozes(); speechSynthesis.onvoiceschanged=carregaVozes;
 function speak(txt, lang="pt-BR"){
  if(!falar || !("speechSynthesis" in window)) return;
  speechSynthesis.cancel();
- const u=new SpeechSynthesisUtterance(txt);u.lang=lang;
+ const u=new SpeechSynthesisUtterance(txt);
+ u.lang=lang;
  const v=vozes.find(v=>v.lang.replace("_","-").startsWith(lang.split("-")[0]));
  if(v) u.voice=v;
  u.rate=1.02;
  speechSynthesis.speak(u);
 }
 
-/* ---------- reconhecimento (entrada) ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 function novoRec(continuo){
  const r=new SR();
@@ -204,45 +250,102 @@ function pararRec(){
 }
 
 let interimEl=null;
-function iniciarRec(){
+function iniciarRec(auto){
  if(!SR){ sys("Este navegador não suporta reconhecimento de voz. Use o Safari."); return; }
- speechSynthesis.cancel();
- const continuo=(mode==="ouvir");
+ if(!auto) speechSynthesis.cancel();
+ const continuo=(mode==="ouvir"||mode==="video");
  rec=novoRec(continuo);
  let finalTxt="";
  rec.onresult=e=>{
  let interim="";
  for(let i=e.resultIndex;i<e.results.length;i++){
  const t=e.results[i][0].transcript;
- if(e.results[i].isFinal) finalTxt+=t+" "; else interim+=t;
+ if(e.results[i].isFinal){
+ if(mode==="video") enfileiraVideo(t.trim());
+ else finalTxt+=t+" ";
+ } else interim+=t;
  }
  if(!interimEl){ interimEl=add("interim",""); }
- interimEl.textContent=(finalTxt+interim).trim();
- if(continuo) transcricao=finalTxt;
+ interimEl.textContent=(mode==="video" ? interim : (finalTxt+interim)).trim();
+ if(mode==="ouvir") transcricao=finalTxt;
  };
  rec.onerror=e=>{
  if(e.error==="not-allowed") sys("Permita o acesso ao microfone nos ajustes do Safari.");
- pararRec();
+ manualStop=true; pararRec();
  };
  rec.onend=()=>{
  gravando=false; big.classList.remove("rec");
  if(interimEl){ interimEl.remove(); interimEl=null; }
+ if(mode==="video"){
+ if(!manualStop){ iniciarRec(true); big.classList.add("rec"); gravando=true; }
+ return;
+ }
  const dito=finalTxt.trim();
  if(mode!=="ouvir" && dito) processa(dito);
  else if(mode==="ouvir" && dito){ transcricao=dito; add("me","🗣️ "+dito); }
  };
  rec.start(); gravando=true; big.classList.add("rec");
- hint.textContent = continuo ? "Ouvindo a conversa… toque de novo para pausar." : "Falando… toque para enviar.";
+ hint.textContent = mode==="video" ? "Ouvindo o vídeo… toque para parar."
+ : continuo ? "Ouvindo a conversa… toque de novo para pausar." : "Falando… toque para enviar.";
+}
+
+function enfileiraVideo(txt){
+ if(!txt) return;
+ filaVideo.push(txt);
+ processaFilaVideo();
+}
+async function processaFilaVideo(){
+ if(processandoVideo) return; processandoVideo=true;
+ while(filaVideo.length){
+ const txt=filaVideo.shift();
+ await videoChunk(txt);
+ }
+ processandoVideo=false;
+}
+async function videoChunk(txt){
+ add("me", txt);
+ try{
+ const resp=await claude([{role:"user",content:txt}],
+ "Você está legendando um vídeo em tempo real. Traduza o trecho de fala para "+nomeLang()+". Responda apenas com a tradução, curta e natural, sem comentários. Se o trecho já estiver em "+nomeLang()+", traduza para português do Brasil.", 300);
+ const langFala=$("#lang").value;
+ add("ai", resp, langFala);
+ speak(resp, langFala);
+ }catch(err){ sys("Erro na legenda: "+err.message); }
 }
 
 /* ---------- Claude ---------- */
+let apiKey="";
+try{ apiKey=localStorage.getItem("lente_api_key")||""; }catch(e){}
+function pedirChave(){
+ const k=prompt("Cole sua chave da API da Anthropic (começa com sk-ant-). Crie uma em console.anthropic.com → API Keys:", apiKey);
+ if(k!==null){
+ apiKey=k.trim();
+ try{ localStorage.setItem("lente_api_key", apiKey); }catch(e){}
+ sys(apiKey ? "Chave salva ✓" : "Chave removida.");
+ }
+}
+document.getElementById("btnKey").onclick=pedirChave;
+function cabecalhos(){
+ const h={"Content-Type":"application/json"};
+ if(apiKey){
+ h["x-api-key"]=apiKey;
+ h["anthropic-version"]="2023-06-01";
+ h["anthropic-dangerous-direct-browser-access"]="true";
+ }
+ return h;
+}
 async function claude(msgs, sistema, maxTok=800){
  const r=await fetch("https://api.anthropic.com/v1/messages",{
- method:"POST", headers:{"Content-Type":"application/json"},
+ method:"POST", headers:cabecalhos(),
  body:JSON.stringify({model:"claude-sonnet-4-6", max_tokens:maxTok, system:sistema, messages:msgs})
  });
  const d=await r.json();
- if(d.error) throw new Error(d.error.message||"Erro na API");
+ if(d.error){
+ if((d.error.type==="authentication_error"||r.status===401) && !apiKey){
+ sys("Para usar o Claude fora do claude.ai, é preciso configurar sua chave da API. Toque em 🔑 Chave da API no topo.");
+ }
+ throw new Error(d.error.message||"Erro na API");
+ }
  return d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
 }
 
@@ -266,8 +369,7 @@ async function processa(dito){
  if(/[àáâãéêíóôõúç]|^(o|a|os|as|de|que)\s/i.test(resp)) langFala="pt-BR";
  }
  pensando.remove();
- add("ai", resp, langFala);
- speak(resp, langFala);
+ add("ai", resp, langFala);speak(resp, langFala);
  }catch(err){
  pensando.remove();
  sys("Falha ao falar com o Claude: "+err.message+". Verifique a internet e tente de novo.");
@@ -281,7 +383,7 @@ async function sugerir(){
  const pensando=add("thinking","Preparando sugestões…");
  try{
  const resp=await claude([{role:"user",content:"Transcrição do que a pessoa está me dizendo agora:\n\n"+transcricao}],
- "Você ajuda o usuário a responder numa conversa ao vivo.Com base na transcrição, diga em 1 frase o ponto principal do que foi dito e sugira 2 respostas curtas e naturais em português do Brasil, numeradas 1 e 2. Seja breve: isso será lido em voz alta no ouvido do usuário.");
+ "Você ajuda o usuário a responder numa conversa ao vivo. Com base na transcrição, diga em 1 frase o ponto principal do que foi dito e sugira 2 respostas curtas e naturais em português do Brasil, numeradas 1 e 2. Seja breve: isso será lido em voz alta no ouvido do usuário.");
  pensando.remove();
  add("ai", resp, "pt-BR");
  speak(resp,"pt-BR");
@@ -290,17 +392,15 @@ async function sugerir(){
  ocupado=false;
 }
 
-/* ---------- câmera ---------- */
-$("#camIn").addEventListener("change", async e=>{
- const f=e.target.files[0]; if(!f) return;
- e.target.value="";
- const b64=await comprime(f);
+/* ---------- câmera e galeria ---------- */
+async function traduzImagem(file){
+ const b64=await comprime(file);
  add("me","📷 Foto enviada");
  const pensando=add("thinking","Lendo o texto da imagem…");
  ocupado=true;
  try{
  const r=await fetch("https://api.anthropic.com/v1/messages",{
- method:"POST", headers:{"Content-Type":"application/json"},
+ method:"POST", headers:cabecalhos(),
  body:JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1000,
  system:"Leia o texto visível na imagem e traduza para português do Brasil. Responda apenas com a tradução, de forma corrida e natural para ser lida em voz alta. Se não houver texto, diga isso em uma frase.",
  messages:[{role:"user",content:[
@@ -308,14 +408,27 @@ $("#camIn").addEventListener("change", async e=>{
  {type:"text",text:"Traduza o texto desta imagem."}]}]})
  });
  const d=await r.json();
- if(d.error) throw new Error(d.error.message);
+ if(d.error){
+ if((d.error.type==="authentication_error"||r.status===401) && !apiKey)
+ sys("Configure sua chave da API: toque em 🔑 Chave da API no topo.");
+ throw new Error(d.error.message);
+ }
  const resp=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
  pensando.remove();
  add("ai", resp, "pt-BR");
  speak(resp,"pt-BR");
  }catch(err){ pensando.remove(); sys("Erro ao ler a imagem: "+err.message); }
  ocupado=false;
+}
+$("#camIn").addEventListener("change", e=>{
+ const f=e.target.files[0]; if(!f) return; e.target.value="";
+ traduzImagem(f);
 });
+$("#galIn").addEventListener("change", e=>{
+ const f=e.target.files[0]; if(!f) return; e.target.value="";
+ traduzImagem(f);
+});
+$("#galeria").onclick=()=>{ $("#galIn").click(); };
 
 function comprime(file){
  return new Promise((res,rej)=>{
@@ -332,14 +445,13 @@ function comprime(file){
  });
 }
 
-/* ---------- controles ---------- */
 big.onclick=()=>{
  if(mode==="cam"){ $("#camIn").click(); return; }
- if(gravando){ rec && rec.stop(); }
- else iniciarRec();
+ if(gravando){ manualStop=true; rec && rec.stop(); }
+ else { manualStop=false; iniciarRec(); }
 };
 $("#sugerir").onclick=sugerir;
-$("#clear").onclick=()=>{ log.innerHTML=""; historico=[]; transcricao=""; boasVindas(); };
+$("#clear").onclick=()=>{ log.innerHTML=""; historico=[]; transcricao=""; filaVideo=[]; boasVindas(); };
 $("#mudo").onclick=()=>{
  falar=!falar;
  $("#mudo").textContent=falar?"🔊 Voz":"🔇 Mudo";
@@ -347,21 +459,22 @@ $("#mudo").onclick=()=>{
 };
 document.querySelectorAll("#tabs button").forEach(b=>{
  b.onclick=()=>{
- pararRec(); speechSynthesis.cancel();
+ manualStop=true; pararRec(); speechSynthesis.cancel(); filaVideo=[];
  document.querySelectorAll("#tabs button").forEach(x=>x.classList.remove("on"));
  b.classList.add("on"); mode=b.dataset.m;
- $("#opts").hidden=(mode!=="trad");
+ $("#opts").hidden=!(mode==="trad"||mode==="video");
  $("#sugerir").hidden=(mode!=="ouvir");
+ $("#galeria").hidden=(mode!=="cam");
  big.textContent = mode==="cam" ? "📷" : "🎙️";
  dicas();
  };
 });
 function dicas(){
- const t={
- chat:"Toque no microfone e converse com o Claude.",
+ const t={chat:"Toque no microfone e converse com o Claude.",
  trad:"Escolha o idioma, toque no microfone e fale — a tradução sai nos alto-falantes.",
  ouvir:"Toque no microfone para ouvir a conversa. Depois toque em “Sugerir resposta”.",
- cam:"Toque no botão para fotografar um texto com a câmera do iPhone."
+ cam:"📷 fotografa com o iPhone. Tirou a foto com os óculos? Sincronize no app AIBuds e toque em 🖼️ Galeria — a mais recente vem primeiro.",
+ video:"Escolha o idioma, dê play no vídeo pelo alto-falante do celular e toque no microfone. As legendas traduzidas aparecem aqui e são lidas nos óculos."
  };
  hint.textContent=t[mode];
 }
@@ -370,7 +483,53 @@ function boasVindas(){
 }
 boasVindas(); dicas();
 
-/* ---------- painel inicial de autorização ---------- */
+const micCfg=$("#micCfg"), vuBar=$("#vuBar"), devList=$("#devList");
+let micStream=null, micCtx=null, testando=false;
+
+$("#btnMicCfg").onclick=()=>{ micCfg.hidden=false; listarDispositivos(); };
+$("#btnFecharMic").onclick=()=>{ pararTesteMic(); micCfg.hidden=true; };
+
+async function listarDispositivos(){
+ try{
+ const devices=await navigator.mediaDevices.enumerateDevices();
+ const ins=devices.filter(d=>d.kind==="audioinput");
+ devList.innerHTML = ins.length
+ ? ins.map(d=>`<div class="dev">🎙️ ${d.label || "Microfone (toque em Testar para ver o nome)"}</div>`).join("")
+ : '<div class="dev">Nenhum microfone detectado ainda — toque em Testar.</div>';
+ }catch(e){}
+}
+
+$("#btnTestarMic").onclick=async ()=>{
+ try{
+ micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+ micCtx=new (window.AudioContext||window.webkitAudioContext)();
+ const src=micCtx.createMediaStreamSource(micStream);
+ const analyser=micCtx.createAnalyser(); analyser.fftSize=256;
+ src.connect(analyser);
+ const data=new Uint8Array(analyser.frequencyBinCount);
+ testando=true;
+ $("#btnTestarMic").hidden=true; $("#btnPararMic").hidden=false;
+ (function loop(){
+ if(!testando) return;
+ analyser.getByteFrequencyData(data);
+ const media=data.reduce((a,b)=>a+b,0)/data.length;
+ vuBar.style.width=Math.min(100, media*1.3)+"%";
+ requestAnimationFrame(loop);
+ })();
+ listarDispositivos();
+ }catch(err){
+ $("#micLbl").textContent="Não deu pra acessar o microfone: "+err.message;
+ }
+};
+$("#btnPararMic").onclick=pararTesteMic;
+function pararTesteMic(){
+ testando=false;
+ if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+ if(micCtx){ micCtx.close(); micCtx=null; }
+ vuBar.style.width="0%";
+ $("#btnTestarMic").hidden=false; $("#btnPararMic").hidden=true;
+}
+
 const btnMic=$("#btnMic"), btnEntrar=$("#btnEntrar"), setupMsg=$("#setupMsg");
 function marca(id, txt){ const c=$(id); c.classList.add("ok"); c.querySelector(".st").textContent=txt; }
 
@@ -383,7 +542,8 @@ btnMic.onclick=async ()=>{
  try{
  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
  stream.getTracks().forEach(t=>t.stop());
- marca("#ckMic","autorizado ✓");marca("#ckBt","ok");
+ marca("#ckMic","autorizado ✓");
+ marca("#ckBt","ok");
  btnMic.textContent="Microfone autorizado ✓";
  btnMic.disabled=true; btnMic.style.opacity=".5";
  btnEntrar.disabled=false;
