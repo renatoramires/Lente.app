@@ -225,6 +225,7 @@ let mode="chat", falar=true, rec=null, gravando=false, ocupado=false;
 let historico=[], transcricao="";
 let manualStop=true;
 let filaVideo=[], processandoVideo=false;
+let videoStream=null, videoRecorder=null, filaAudio=[], processandoAudio=false;
 
 function add(cls, txt, langFala){
   const d=document.createElement("div");
@@ -311,7 +312,7 @@ function iniciarRec(auto){
     : continuo ? "Ouvindo a conversa… toque de novo para pausar." : "Falando… toque para enviar.";
 }
 
-/* ---------- legenda ao vivo de vídeo ---------- */
+/* ---------- tradução de áudio/vídeo pelo microfone do celular ---------- */
 function enfileiraVideo(txt){
   if(!txt) return;
   filaVideo.push(txt);
@@ -326,14 +327,102 @@ async function processaFilaVideo(){
   processandoVideo=false;
 }
 async function videoChunk(txt){
+  if(!txt || txt.length<2) return;
   add("me", txt);
   try{
     const resp=await chatgpt([{role:"user",content:txt}],
-      "Você está legendando um vídeo em tempo real. Traduza o trecho de fala para "+nomeLang()+". Responda apenas com a tradução, curta e natural, sem comentários. Se o trecho já estiver em "+nomeLang()+", traduza para português do Brasil.", 300);
+      "Você está traduzindo áudio de TV, vídeo, palestra ou computador em tempo real. Traduza o trecho para "+nomeLang()+". Responda apenas com a tradução, curta e natural, sem comentários. Se o trecho já estiver em "+nomeLang()+", traduza para português do Brasil.", 300);
     const langFala=$("#lang").value;
     add("ai", resp, langFala);
     speak(resp, langFala);
-  }catch(err){ sys("Erro na legenda: "+err.message); }
+  }catch(err){ sys("Erro na tradução do vídeo: "+err.message); }
+}
+function mimeAudioPreferido(){
+  const tipos=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/mpeg"];
+  if(!window.MediaRecorder) return "";
+  return tipos.find(t=>MediaRecorder.isTypeSupported(t)) || "";
+}
+async function iniciarVideoAudio(){
+  if(!apiKey){
+    sys("Para traduzir áudio da TV/vídeo, toque em 🔑 Chave da API no topo e informe sua chave OpenAI.");
+    return;
+  }
+  if(!navigator.mediaDevices?.getUserMedia){
+    sys("Este navegador não liberou acesso ao microfone. Abra no Safari/Chrome e autorize o microfone.");
+    return;
+  }
+  if(!window.MediaRecorder){
+    sys("Este navegador não suporta gravação de áudio em blocos. Vou tentar o modo antigo de reconhecimento de voz.");
+    manualStop=false; iniciarRec();
+    return;
+  }
+  try{
+    speechSynthesis.cancel();
+    filaAudio=[]; filaVideo=[]; processandoAudio=false;
+    const constraints={audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:true}};
+    videoStream=await navigator.mediaDevices.getUserMedia(constraints);
+    const mime=mimeAudioPreferido();
+    videoRecorder=new MediaRecorder(videoStream, mime ? {mimeType:mime} : undefined);
+    videoRecorder.ondataavailable=e=>{
+      if(e.data && e.data.size>1200){
+        filaAudio.push(e.data);
+        processaFilaAudio();
+      }
+    };
+    videoRecorder.onerror=e=>sys("Erro no gravador do microfone: "+(e.error?.message||e.message||"desconhecido"));
+    videoRecorder.onstop=()=>{ pararVideoAudio(false); };
+    videoRecorder.start(5000);
+    gravando=true; manualStop=false; big.classList.add("rec");
+    hint.textContent="Captando som pelo microfone do celular. Aproxime o celular da TV/caixa de som; a tradução será falada nos óculos.";
+    sys("Captação iniciada. Deixe o celular perto da TV e mantenha os óculos como saída Bluetooth do iPhone.");
+  }catch(err){
+    gravando=false; big.classList.remove("rec");
+    sys("Não consegui captar o som pelo microfone: "+err.message+". Autorize o microfone e aproxime o celular da TV.");
+  }
+}
+function pararVideoAudio(mostrar=true){
+  if(videoRecorder && videoRecorder.state!=="inactive"){
+    try{ videoRecorder.stop(); }catch(e){}
+  }
+  videoRecorder=null;
+  if(videoStream){
+    videoStream.getTracks().forEach(t=>t.stop());
+    videoStream=null;
+  }
+  gravando=false; manualStop=true; big.classList.remove("rec");
+  if(mostrar) hint.textContent="Tradução de vídeo pausada.";
+}
+async function processaFilaAudio(){
+  if(processandoAudio) return; processandoAudio=true;
+  while(filaAudio.length){
+    const blob=filaAudio.shift();
+    try{
+      const txt=await transcreverAudio(blob);
+      if(txt) enfileiraVideo(txt);
+    }catch(err){ sys("Erro ao transcrever áudio: "+err.message); }
+  }
+  processandoAudio=false;
+}
+async function transcreverAudio(blob){
+  if(!apiKey) throw new Error("chave da OpenAI não configurada");
+  const fd=new FormData();
+  const ext=(blob.type||"").includes("mp4") ? "m4a" : ((blob.type||"").includes("mpeg") ? "mp3" : "webm");
+  fd.append("file", blob, "audio."+ext);
+  fd.append("model", "gpt-4o-mini-transcribe");
+  const lang=($("#langDe").value||"en-US").split("-")[0];
+  fd.append("language", lang);
+  fd.append("response_format", "json");
+  const r=await fetch("https://api.openai.com/v1/audio/transcriptions",{
+    method:"POST",
+    headers:{"Authorization":"Bearer "+apiKey},
+    body:fd
+  });
+  const d=await r.json().catch(()=>({error:{message:"Resposta inválida da transcrição"}}));
+  if(!r.ok || d.error){
+    if(r.status===401) sys("Chave OpenAI inválida ou sem permissão para transcrição.");
+    throw new Error((d.error&&d.error.message)||"Erro na transcrição da OpenAI");
+  }
+  return (d.text||"").trim();
 }
 
 /* ---------- ChatGPT / OpenAI ---------- */
@@ -497,11 +586,16 @@ function comprime(file){
 /* ---------- controles ---------- */
 big.onclick=()=>{
   if(mode==="cam"){ $("#camIn").click(); return; }
+  if(mode==="video"){
+    if(gravando) pararVideoAudio();
+    else iniciarVideoAudio();
+    return;
+  }
   if(gravando){ manualStop=true; rec && rec.stop(); }
   else { manualStop=false; iniciarRec(); }
 };
 $("#sugerir").onclick=sugerir;
-$("#clear").onclick=()=>{ log.innerHTML=""; historico=[]; transcricao=""; filaVideo=[]; boasVindas(); };
+$("#clear").onclick=()=>{ log.innerHTML=""; historico=[]; transcricao=""; filaVideo=[]; filaAudio=[]; boasVindas(); };
 $("#mudo").onclick=()=>{
   falar=!falar;
   $("#mudo").textContent=falar?"🔊 Voz":"🔇 Mudo";
@@ -509,7 +603,7 @@ $("#mudo").onclick=()=>{
 };
 document.querySelectorAll("#tabs button").forEach(b=>{
   b.onclick=()=>{
-    manualStop=true; pararRec(); speechSynthesis.cancel(); filaVideo=[];
+    manualStop=true; pararRec(); pararVideoAudio(false); speechSynthesis.cancel(); filaVideo=[]; filaAudio=[];
     document.querySelectorAll("#tabs button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); mode=b.dataset.m;
     $("#opts").hidden=!(mode==="trad"||mode==="video");
@@ -527,12 +621,12 @@ function dicas(){
     trad:"Escolha o idioma, toque no microfone e fale — a tradução sai nos alto-falantes.",
     ouvir:"Toque no microfone para ouvir a conversa. Depois toque em “Sugerir resposta”.",
     cam:"📷 fotografa com o iPhone. Tirou a foto com os óculos? Sincronize no app AIBuds e toque em 🖼️ Galeria — a mais recente vem primeiro.",
-    video:"YouTube no mesmo iPhone: abra o vídeo no Safari, ative o Picture-in-Picture (janelinha flutuante), volte aqui e toque no microfone. Vídeo em outra tela (TV/PC): só toque no microfone."
+    video:"TV ou computador: deixe o celular perto da caixa de som/TV e toque no microfone. O app transcreve em blocos, traduz e fala nos óculos Bluetooth."
   };
   hint.textContent=t[mode];
 }
 function boasVindas(){
-  sys("Óculos conectados por Bluetooth? Então o som já sai por eles. Escolha um modo acima.");
+  sys("Óculos conectados por Bluetooth? Então a voz traduzida sai por eles. Para TV, use 🎥 Traduzir vídeo e deixe o celular perto do som.");
 }
 boasVindas(); dicas();
 
