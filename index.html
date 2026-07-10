@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Lente — assistente Claude para seus óculos</title>
+<title>Lente — assistente ChatGPT para seus óculos</title>
 <style>
   :root{
     --bg:#0e1116; --panel:#161b23; --panel2:#1d242f;
@@ -141,7 +141,7 @@
   <div id="setupMsg"></div>
 </div>
 <header>
-  <h1>Lente <span>· Claude nos seus óculos</span></h1>
+  <h1>Lente <span>· ChatGPT nos seus óculos</span></h1>
   <div class="sub">Conecte os óculos por Bluetooth ao iPhone — o áudio passa por eles.</div>
   <button id="btnMicCfg">🎚️ Configurar microfone</button>
   <button id="btnKey" style="margin-top:10px;margin-left:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:600;cursor:pointer;">🔑 Chave da API</button>
@@ -328,7 +328,7 @@ async function processaFilaVideo(){
 async function videoChunk(txt){
   add("me", txt);
   try{
-    const resp=await claude([{role:"user",content:txt}],
+    const resp=await chatgpt([{role:"user",content:txt}],
       "Você está legendando um vídeo em tempo real. Traduza o trecho de fala para "+nomeLang()+". Responda apenas com a tradução, curta e natural, sem comentários. Se o trecho já estiver em "+nomeLang()+", traduza para português do Brasil.", 300);
     const langFala=$("#lang").value;
     add("ai", resp, langFala);
@@ -336,40 +336,76 @@ async function videoChunk(txt){
   }catch(err){ sys("Erro na legenda: "+err.message); }
 }
 
-/* ---------- Claude ---------- */
+/* ---------- ChatGPT / OpenAI ---------- */
 let apiKey="";
-try{ apiKey=localStorage.getItem("lente_api_key")||""; }catch(e){}
+try{ apiKey=localStorage.getItem("lente_openai_api_key")||""; }catch(e){}
 function pedirChave(){
-  const k=prompt("Cole sua chave da API da Anthropic (começa com sk-ant-). Crie uma em console.anthropic.com → API Keys:", apiKey);
+  const k=prompt("Cole sua chave da API da OpenAI (começa com sk-...). Ela fica salva só neste navegador:", apiKey);
   if(k!==null){
     apiKey=k.trim();
-    try{ localStorage.setItem("lente_api_key", apiKey); }catch(e){}
-    sys(apiKey ? "Chave salva ✓" : "Chave removida.");
+    try{ localStorage.setItem("lente_openai_api_key", apiKey); }catch(e){}
+    sys(apiKey ? "Chave OpenAI salva ✓" : "Chave removida.");
   }
 }
 document.getElementById("btnKey").onclick=pedirChave;
 function cabecalhos(){
   const h={"Content-Type":"application/json"};
-  if(apiKey){
-    h["x-api-key"]=apiKey;
-    h["anthropic-version"]="2023-06-01";
-    h["anthropic-dangerous-direct-browser-access"]="true";
-  }
+  if(apiKey) h["Authorization"]="Bearer "+apiKey;
   return h;
 }
-async function claude(msgs, sistema, maxTok=800){
-  const r=await fetch("https://api.anthropic.com/v1/messages",{
-    method:"POST", headers:cabecalhos(),
-    body:JSON.stringify({model:"claude-sonnet-4-6", max_tokens:maxTok, system:sistema, messages:msgs})
-  });
-  const d=await r.json();
-  if(d.error){
-    if((d.error.type==="authentication_error"||r.status===401) && !apiKey){
-      sys("Para usar o Claude fora do claude.ai, é preciso configurar sua chave da API. Toque em 🔑 Chave da API no topo.");
-    }
-    throw new Error(d.error.message||"Erro na API");
+function normalizaMensagens(msgs, sistema){
+  const out=[];
+  if(sistema) out.push({role:"system",content:sistema});
+  for(const m of msgs) out.push(m);
+  return out;
+}
+async function chatgpt(msgs, sistema, maxTok=800){
+  if(!apiKey){
+    sys("Para usar o ChatGPT, toque em 🔑 Chave da API no topo e informe sua chave da OpenAI.");
+    throw new Error("chave da OpenAI não configurada");
   }
-  return d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+  const r=await fetch("https://api.openai.com/v1/chat/completions",{
+    method:"POST", headers:cabecalhos(),
+    body:JSON.stringify({
+      model:"gpt-4.1-mini",
+      max_tokens:maxTok,
+      temperature:0.3,
+      messages:normalizaMensagens(msgs, sistema)
+    })
+  });
+  const d=await r.json().catch(()=>({error:{message:"Resposta inválida da OpenAI"}}));
+  if(!r.ok || d.error){
+    if(r.status===401) sys("Chave OpenAI inválida ou sem permissão. Toque em 🔑 Chave da API e confira a chave.");
+    throw new Error((d.error&&d.error.message)||"Erro na API da OpenAI");
+  }
+  return (d.choices?.[0]?.message?.content||"").trim();
+}
+async function chatgptImagem(b64, sistema, pergunta, maxTok=1000){
+  if(!apiKey){
+    sys("Para usar visão com ChatGPT, toque em 🔑 Chave da API no topo e informe sua chave da OpenAI.");
+    throw new Error("chave da OpenAI não configurada");
+  }
+  const r=await fetch("https://api.openai.com/v1/chat/completions",{
+    method:"POST", headers:cabecalhos(),
+    body:JSON.stringify({
+      model:"gpt-4.1-mini",
+      max_tokens:maxTok,
+      temperature:0.2,
+      messages:[
+        {role:"system",content:sistema},
+        {role:"user",content:[
+          {type:"text",text:pergunta},
+          {type:"image_url",image_url:{url:"data:image/jpeg;base64,"+b64}}
+        ]}
+      ]
+    })
+  });
+  const d=await r.json().catch(()=>({error:{message:"Resposta inválida da OpenAI"}}));
+  if(!r.ok || d.error){
+    if(r.status===401) sys("Chave OpenAI inválida ou sem permissão. Toque em 🔑 Chave da API e confira a chave.");
+    throw new Error((d.error&&d.error.message)||"Erro na API da OpenAI");
+  }
+  return (d.choices?.[0]?.message?.content||"").trim();
 }
 
 function nomeLang(){ const o=$("#lang").selectedOptions[0]; return o.dataset.nome; }
@@ -377,17 +413,17 @@ function nomeLang(){ const o=$("#lang").selectedOptions[0]; return o.dataset.nom
 async function processa(dito){
   if(ocupado) return; ocupado=true;
   add("me", dito);
-  const pensando=add("thinking","Claude está pensando…");
+  const pensando=add("thinking","ChatGPT está pensando…");
   try{
     let resp, langFala="pt-BR";
     if(mode==="chat"){
       historico.push({role:"user",content:dito});
-      resp=await claude(historico.slice(-16),
-        "Você é o Claude falando pelos alto-falantes de um óculos inteligente. Responda em português do Brasil, de forma natural, curta e clara (2 a 4 frases), como numa conversa falada. Sem listas, sem formatação.");
+      resp=await chatgpt(historico.slice(-16),
+        "Você é o ChatGPT falando pelos alto-falantes de um óculos inteligente. Responda em português do Brasil, de forma natural, curta e clara (2 a 4 frases), como numa conversa falada. Sem listas, sem formatação.");
       historico.push({role:"assistant",content:resp});
     } else if(mode==="trad"){
       langFala=$("#lang").value;
-      resp=await claude([{role:"user",content:dito}],
+      resp=await chatgpt([{role:"user",content:dito}],
         "Você é um tradutor simultâneo. Traduza a fala do usuário para "+nomeLang()+". Responda APENAS com a tradução, nada mais. Se a fala já estiver em "+nomeLang()+", traduza para português do Brasil.");
       if(/[àáâãéêíóôõúç]|^(o|a|os|as|de|que)\s/i.test(resp)) langFala="pt-BR";
     }
@@ -396,7 +432,7 @@ async function processa(dito){
     speak(resp, langFala);
   }catch(err){
     pensando.remove();
-    sys("Falha ao falar com o Claude: "+err.message+". Verifique a internet e tente de novo.");
+    sys("Falha ao falar com o ChatGPT: "+err.message+". Verifique a internet e tente de novo.");
   }
   ocupado=false;
 }
@@ -406,7 +442,7 @@ async function sugerir(){
   if(ocupado) return; ocupado=true;
   const pensando=add("thinking","Preparando sugestões…");
   try{
-    const resp=await claude([{role:"user",content:"Transcrição do que a pessoa está me dizendo agora:\n\n"+transcricao}],
+    const resp=await chatgpt([{role:"user",content:"Transcrição do que a pessoa está me dizendo agora:\n\n"+transcricao}],
       "Você ajuda o usuário a responder numa conversa ao vivo. Com base na transcrição, diga em 1 frase o ponto principal do que foi dito e sugira 2 respostas curtas e naturais em português do Brasil, numeradas 1 e 2. Seja breve: isso será lido em voz alta no ouvido do usuário.");
     pensando.remove();
     add("ai", resp, "pt-BR");
@@ -423,21 +459,10 @@ async function traduzImagem(file){
   const pensando=add("thinking","Lendo o texto da imagem…");
   ocupado=true;
   try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST", headers:cabecalhos(),
-      body:JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1000,
-        system:"Leia o texto visível na imagem e traduza para português do Brasil. Responda apenas com a tradução, de forma corrida e natural para ser lida em voz alta. Se não houver texto, diga isso em uma frase.",
-        messages:[{role:"user",content:[
-          {type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
-          {type:"text",text:"Traduza o texto desta imagem."}]}]})
-    });
-    const d=await r.json();
-    if(d.error){
-      if((d.error.type==="authentication_error"||r.status===401) && !apiKey)
-        sys("Configure sua chave da API: toque em 🔑 Chave da API no topo.");
-      throw new Error(d.error.message);
-    }
-    const resp=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+    const resp=await chatgptImagem(b64,
+      "Leia o texto visível na imagem e traduza para português do Brasil. Responda apenas com a tradução, de forma corrida e natural para ser lida em voz alta. Se não houver texto, diga isso em uma frase.",
+      "Traduza o texto desta imagem.",
+      1000);
     pensando.remove();
     add("ai", resp, "pt-BR");
     speak(resp,"pt-BR");
@@ -498,7 +523,7 @@ document.querySelectorAll("#tabs button").forEach(b=>{
 });
 function dicas(){
   const t={
-    chat:"Toque no microfone e converse com o Claude.",
+    chat:"Toque no microfone e converse com o ChatGPT.",
     trad:"Escolha o idioma, toque no microfone e fale — a tradução sai nos alto-falantes.",
     ouvir:"Toque no microfone para ouvir a conversa. Depois toque em “Sugerir resposta”.",
     cam:"📷 fotografa com o iPhone. Tirou a foto com os óculos? Sincronize no app AIBuds e toque em 🖼️ Galeria — a mais recente vem primeiro.",
@@ -586,7 +611,7 @@ btnMic.onclick=async ()=>{
     } else if(err.name==="NotFoundError"){
       setupMsg.textContent="Nenhum microfone encontrado. Verifique a conexão Bluetooth dos óculos.";
     } else {
-      setupMsg.textContent="Não deu certo: "+err.message+". Se estiver no app do Claude, abra esta página no Safari.";
+      setupMsg.textContent="Não deu certo: "+err.message+". Se estiver em outro app, abra esta página no Safari.";
     }
   }
 };
