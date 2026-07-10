@@ -225,7 +225,7 @@ let mode="chat", falar=true, rec=null, gravando=false, ocupado=false;
 let historico=[], transcricao="";
 let manualStop=true;
 let filaVideo=[], processandoVideo=false;
-let videoStream=null, videoRecorder=null, filaAudio=[], processandoAudio=false;
+let videoStream=null, videoRecorder=null, videoTimer=null, videoMime="", filaAudio=[], processandoAudio=false;
 
 function add(cls, txt, langFala){
   const d=document.createElement("div");
@@ -357,26 +357,55 @@ async function iniciarVideoAudio(){
     filaAudio=[]; filaVideo=[]; processandoAudio=false;
     const constraints={audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:true}};
     videoStream=await navigator.mediaDevices.getUserMedia(constraints);
-    const mime=mimeAudioPreferido();
-    videoRecorder=new MediaRecorder(videoStream, mime ? {mimeType:mime} : undefined);
-    videoRecorder.ondataavailable=e=>{
-      if(e.data && e.data.size>1200){
-        filaAudio.push(e.data);
-        processaFilaAudio();
-      }
-    };
-    videoRecorder.onerror=e=>sys("Erro no gravador do microfone: "+(e.error?.message||e.message||"desconhecido"));
-    videoRecorder.onstop=()=>{ pararVideoAudio(false); };
-    videoRecorder.start(5000);
+    videoMime=mimeAudioPreferido();
     gravando=true; manualStop=false; big.classList.add("rec");
     hint.textContent="Captando som pelo microfone do celular. Aproxime o celular da TV/caixa de som; a tradução será falada nos óculos.";
     sys("Captação iniciada. Deixe o celular perto da TV e mantenha os óculos como saída Bluetooth do iPhone.");
+    gravarBlocoVideo();
   }catch(err){
     gravando=false; big.classList.remove("rec");
     sys("Não consegui captar o som pelo microfone: "+err.message+". Autorize o microfone e aproxime o celular da TV.");
   }
 }
+function gravarBlocoVideo(){
+  if(!videoStream || manualStop) return;
+  let partes=[];
+  try{
+    videoRecorder=new MediaRecorder(videoStream, videoMime ? {mimeType:videoMime} : undefined);
+  }catch(err){
+    sys("Formato de gravação não suportado neste navegador: "+err.message);
+    pararVideoAudio();
+    return;
+  }
+  const tipo=videoRecorder.mimeType || videoMime || "audio/webm";
+  videoRecorder.ondataavailable=e=>{
+    if(e.data && e.data.size>0) partes.push(e.data);
+  };
+  videoRecorder.onerror=e=>sys("Erro no gravador do microfone: "+(e.error?.message||e.message||"desconhecido"));
+  videoRecorder.onstop=()=>{
+    if(partes.length && !manualStop){
+      const blob=new Blob(partes,{type:tipo});
+      if(blob.size>4000){
+        filaAudio.push(blob);
+        processaFilaAudio();
+      }
+      partes=[];
+      if(!manualStop && videoStream){
+        videoTimer=setTimeout(gravarBlocoVideo, 250);
+      }
+    }
+  };
+  videoRecorder.start();
+  videoTimer=setTimeout(()=>{
+    if(videoRecorder && videoRecorder.state==="recording"){
+      try{ videoRecorder.stop(); }catch(e){}
+    }
+  }, 7000);
+}
+
 function pararVideoAudio(mostrar=true){
+  manualStop=true;
+  if(videoTimer){ clearTimeout(videoTimer); videoTimer=null; }
   if(videoRecorder && videoRecorder.state!=="inactive"){
     try{ videoRecorder.stop(); }catch(e){}
   }
@@ -385,7 +414,7 @@ function pararVideoAudio(mostrar=true){
     videoStream.getTracks().forEach(t=>t.stop());
     videoStream=null;
   }
-  gravando=false; manualStop=true; big.classList.remove("rec");
+  gravando=false; big.classList.remove("rec");
   if(mostrar) hint.textContent="Tradução de vídeo pausada.";
 }
 async function processaFilaAudio(){
