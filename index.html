@@ -24,6 +24,7 @@
  h1{font-size:20px; margin:0; letter-spacing:.3px; font-weight:700;}
  h1 span{color:var(--accent);}
  .sub{font-size:12px; color:var(--dim); margin-top:2px;}
+
  nav{display:flex; gap:6px; padding:10px 14px; overflow-x:auto;}
  nav button{
  flex:0 0 auto; border:1px solid var(--line); background:var(--panel);
@@ -31,164 +32,387 @@
  font-weight:600; cursor:pointer;
  }
  nav button.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+
  #opts{display:flex; gap:8px; padding:0 14px 8px; align-items:center; flex-wrap:wrap;}
  #opts label{font-size:12px; color:var(--dim);}
- select,input,textarea{
+ select{
  background:var(--panel2); color:var(--ink); border:1px solid var(--line);
  border-radius:10px; padding:8px 10px; font-size:14px;
  }
+
  main{
  flex:1; overflow-y:auto; padding:6px 14px 12px; display:flex;
  flex-direction:column; gap:10px; -webkit-overflow-scrolling:touch;
  }
- .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px;}
- .card h2{font-size:16px; margin:0 0 8px;}
- .card p{margin:6px 0; color:var(--dim); line-height:1.45; font-size:14px;}
- .grid{display:grid; gap:10px; grid-template-columns:1fr;}
  .msg{max-width:88%; padding:10px 13px; border-radius:14px; font-size:15px; line-height:1.45; white-space:pre-wrap;}
  .me{align-self:flex-end; background:var(--panel2); border:1px solid var(--line);}
  .ai{align-self:flex-start; background:#12352f; border:1px solid #1d4f47;}
  .sys{align-self:center; color:var(--dim); font-size:12.5px; text-align:center; padding:2px 8px;}
  .interim{align-self:flex-end; color:var(--dim); font-style:italic; font-size:14px;}
- .pill{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); color:var(--dim); border-radius:999px; padding:6px 9px; font-size:12px;}
- .dot{width:8px; height:8px; border-radius:50%; background:var(--dim);}
- .dot.live{background:var(--live); box-shadow:0 0 0 4px rgba(252,129,129,.12);}
- .actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
- .btn{border:none; background:var(--accent); color:var(--accent-ink); border-radius:12px; padding:10px 12px; font-weight:700; cursor:pointer;}
- .btn.secondary{background:var(--panel2); color:var(--ink); border:1px solid var(--line);}
- .btn.warn{background:var(--warn); color:#2d1700;}
- video,canvas{width:100%; border-radius:14px; border:1px solid var(--line); background:#05070a;}
+ .msg .replay{display:block; margin-top:6px; background:none; border:none; color:var(--accent); font-size:12.5px; padding:0; cursor:pointer;}
+
  footer{padding:10px 14px 14px; border-top:1px solid var(--line); background:var(--bg);}
  .row{display:flex; gap:10px; align-items:center; justify-content:center;}
  #big{
  width:84px; height:84px; border-radius:50%; border:none; cursor:pointer;
  background:var(--accent); color:var(--accent-ink); font-size:34px;
  display:flex; align-items:center; justify-content:center;
- box-shadow:0 0 0 0 rgba(79,209,197,.45); transition:transform .15s ease, box-shadow .2s ease;
+ box-shadow:0 0 0 0 rgba(79,209,197,.45); transition:transform .1s;
  }
- #big:active{transform:scale(.96);}
- #big.live{background:var(--live); color:#260606; animation:pulse 1.35s infinite;}
- #txt{flex:1; min-height:44px; max-height:110px; resize:none;}
- #send{height:44px; min-width:54px;}
- .hidden{display:none!important;}
- @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(252,129,129,.45)}70%{box-shadow:0 0 0 18px rgba(252,129,129,0)}100%{box-shadow:0 0 0 0 rgba(252,129,129,0)}}
- @media(min-width:760px){body{max-width:520px; margin:0 auto; border-left:1px solid var(--line); border-right:1px solid var(--line);} .grid{grid-template-columns:1fr 1fr;}}
+ #big:active{transform:scale(.94);}
+ #big.rec{background:var(--live); color:#3d0d0d; animation:pulse 1.4s infinite;}
+ @keyframes pulse{
+ 0%{box-shadow:0 0 0 0 rgba(252,129,129,.5);}
+ 70%{box-shadow:0 0 0 22px rgba(252,129,129,0);}
+ 100%{box-shadow:0 0 0 0 rgba(252,129,129,0);}
+ }
+ .side{
+ border:1px solid var(--line); background:var(--panel); color:var(--ink);
+ border-radius:14px; padding:12px 14px; font-size:13.5px; font-weight:600; cursor:pointer;
+ min-width:96px;
+ }
+ .side:disabled{opacity:.4;}
+ #hint{text-align:center; font-size:12.5px; color:var(--dim); margin-top:8px; min-height:16px;}
+ #camIn{display:none;}
+ .thinking{align-self:flex-start; color:var(--accent); font-size:13px;}
+
+ /* ---- painel inicial de autorização ---- */
+ #setup{
+ position:fixed; inset:0; background:var(--bg); z-index:50;
+ display:flex; flex-direction:column; align-items:center; justify-content:center;
+ padding:28px 22px calc(28px + env(safe-area-inset-bottom)); text-align:center; gap:14px;
+ }
+ #setup h2{margin:0; font-size:24px;}
+ #setup h2 span{color:var(--accent);}
+ #setup p{color:var(--dim); font-size:14.5px; margin:0; max-width:320px; line-height:1.5;}
+ .check{width:100%; max-width:340px; display:flex; align-items:center; gap:12px;
+ background:var(--panel); border:1px solid var(--line); border-radius:14px;
+ padding:13px 15px; font-size:14.5px; text-align:left;
+ }
+ .check .st{margin-left:auto; font-size:13px; color:var(--dim); flex:0 0 auto;}
+ .check.ok{border-color:#2f6f5f;}
+ .check.ok .st{color:var(--accent);}
+ #btnMic{
+ width:100%; max-width:340px; border:none; border-radius:16px;
+ background:var(--accent); color:var(--accent-ink);
+ font-size:17px; font-weight:700; padding:16px; cursor:pointer; margin-top:6px;
+ }
+ #btnEntrar{
+ width:100%; max-width:340px; border:1px solid var(--line); border-radius:16px;
+ background:var(--panel); color:var(--ink);
+ font-size:16px; font-weight:600; padding:14px; cursor:pointer;
+ }
+ #btnEntrar:disabled{opacity:.35;}
+ #setupMsg{font-size:13px; color:var(--warn); min-height:18px; max-width:340px;}
 </style>
 </head>
 <body>
-<header>
- <h1><span>Lente</span>.app</h1>
- <div class="sub">Assistente Claude para óculos, celular e tradução ao vivo</div>
-</header>
-<nav>
- <button class="on" data-tab="chat">Chat</button>
- <button data-tab="visao">Visão</button>
- <button data-tab="traducao">Tradução</button>
- <button data-tab="setup">Config</button>
-</nav>
-<div id="opts">
- <span class="pill"><span id="statusDot" class="dot"></span><span id="statusText">Pronto</span></span>
- <label>Idioma</label>
- <select id="lang"><option value="pt-BR">Português</option><option value="en-US">Inglês</option><option value="es-ES">Espanhol</option></select>
+<div id="setup">
+ <h2>Lente <span>· preparação</span></h2>
+ <p>Antes de começar, autorize o microfone. Ele é usado só enquanto o app está aberto — nada é gravado sem você tocar no botão.</p>
+
+ <div class="check" id="ckBt">🕶️ <div>Óculos por Bluetooth<br><small style="color:var(--dim)">Conecte nos Ajustes do iPhone (como fone)</small></div><span class="st">lembrete</span></div>
+ <div class="check" id="ckMic">🎙️ <div>Microfone</div><span class="st">aguardando</span></div>
+ <div class="check" id="ckVoz">🔊 <div>Voz (leitura em voz alta)</div><span class="st">aguardando</span></div>
+
+ <button id="btnMic">Autorizar microfone</button>
+ <button id="btnEntrar">Entrar no app</button>
+ <div id="setupMsg"></div>
 </div>
-<main id="main">
- <section id="tab-chat">
-  <div class="sys">Toque no microfone, fale, ou digite uma pergunta.</div>
-  <div class="msg ai">Oi, Renato. Sou o Lente: posso ouvir, traduzir e ajudar com o que estiver na câmera. Esta versão é um protótipo web; para usar Claude de verdade, conecte um backend seguro.</div>
- </section>
- <section id="tab-visao" class="hidden">
-  <div class="card">
-   <h2>Câmera do celular</h2>
-   <p>Use o celular como câmera para ler placas, textos, produtos ou objetos. A imagem não sai do aparelho neste protótipo.</p>
-   <video id="video" playsinline autoplay muted></video>
-   <canvas id="shot" class="hidden"></canvas>
-   <div class="actions">
-    <button class="btn" id="cameraBtn">Abrir câmera</button>
-    <button class="btn secondary" id="photoBtn">Capturar</button>
-   </div>
-  </div>
- </section>
- <section id="tab-traducao" class="hidden">
-  <div class="card">
-   <h2>Tradução simultânea</h2>
-   <p>Modo pensado para palestra, viagem, curso ou cinema: capta áudio, transcreve e mostra a tradução. A integração final deve chamar Claude/Whisper no servidor.</p>
-   <div class="grid">
-    <label>Origem<select id="from"><option>Inglês</option><option>Espanhol</option><option>Francês</option><option>Italiano</option></select></label>
-    <label>Destino<select id="to"><option>Português brasileiro</option><option>Inglês</option><option>Espanhol</option></select></label>
-   </div>
-   <div class="actions"><button class="btn" id="translateDemo">Simular tradução</button></div>
-  </div>
- </section>
- <section id="tab-setup" class="hidden">
-  <div class="card">
-   <h2>Conectar óculos</h2>
-   <p>Compatível como conceito com óculos Bluetooth/microfone e celular como câmera. Even G2 pode servir como display/microfone; TopStep/AIBuds depende do app/SDK do fabricante.</p>
-   <div class="actions">
-    <button class="btn secondary" id="btBtn">Procurar Bluetooth</button>
-    <button class="btn secondary" id="wakeBtn">Testar voz</button>
-   </div>
-  </div>
-  <div class="card">
-   <h2>Backend seguro</h2>
-   <p>Nunca coloque chave da Anthropic/OpenAI no HTML. Crie uma API intermediária para chamar Claude, transcrição e tradução.</p>
-  </div>
- </section>
-</main>
+<header>
+ <h1>Lente <span>· Claude nos seus óculos</span></h1>
+ <div class="sub">Conecte os óculos por Bluetooth ao iPhone — o áudio passa por eles.</div>
+</header>
+
+<nav id="tabs">
+ <button data-m="chat" class="on">💬 Conversar</button>
+ <button data-m="trad">🌐 Traduzir voz</button>
+ <button data-m="ouvir">👂 Ajudar a responder</button>
+ <button data-m="cam">📷 Traduzir texto</button>
+</nav>
+
+<div id="opts" hidden>
+ <label>Traduzir para:</label>
+ <select id="lang">
+ <option value="en-US" data-nome="inglês">Inglês</option>
+ <option value="es-ES" data-nome="espanhol">Espanhol</option>
+ <option value="fr-FR" data-nome="francês">Francês</option>
+ <option value="it-IT" data-nome="italiano">Italiano</option>
+ <option value="de-DE" data-nome="alemão">Alemão</option>
+ <option value="ja-JP" data-nome="japonês">Japonês</option>
+ <option value="zh-CN" data-nome="chinês (mandarim)">Chinês</option>
+ <option value="pt-BR" data-nome="português">Português</option>
+ </select>
+</div>
+
+<main id="log"></main>
+
 <footer>
  <div class="row">
-  <button id="big" title="Falar">🎙️</button>
-  <textarea id="txt" placeholder="Digite aqui..."></textarea>
-  <button id="send" class="btn">Enviar</button>
+ <button class="side" id="clear">Limpar</button>
+ <button id="big" aria-label="Falar">🎙️</button>
+ <button class="side" id="sugerir" hidden>Sugerir resposta</button>
+ <button class="side" id="mudo">🔊 Voz</button>
  </div>
+ <div id="hint">Toque no microfone e fale.</div>
+ <input type="file" id="camIn" accept="image/*" capture="environment">
 </footer>
+
 <script>
-const $ = (s)=>document.querySelector(s);
-const main = $('#main');
-const statusDot = $('#statusDot');
-const statusText = $('#statusText');
-let listening = false;
-let recognition;
-function setStatus(text, live=false){statusText.textContent=text; statusDot.classList.toggle('live', live); $('#big').classList.toggle('live', live);}
-function addMsg(text, who='ai'){
- const el=document.createElement('div'); el.className='msg '+who; el.textContent=text; $('#tab-chat').appendChild(el); main.scrollTop=main.scrollHeight;
+const $=s=>document.querySelector(s);
+const log=$("#log"), big=$("#big"), hint=$("#hint");
+let mode="chat", falar=true, rec=null, gravando=false, ocupado=false;
+let historico=[], transcricao="";
+
+function add(cls, txt, langFala){
+ const d=document.createElement("div");
+ d.className="msg "+cls; d.textContent=txt;
+ if(cls==="ai" && langFala!==undefined){
+ const b=document.createElement("button");
+ b.className="replay"; b.textContent="▶ Ouvir de novo";
+ b.onclick=()=>speak(txt, langFala);
+ d.appendChild(b);
+ }
+ log.appendChild(d); log.scrollTop=log.scrollHeight; return d;
 }
-document.querySelectorAll('nav button').forEach(btn=>btn.onclick=()=>{
- document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
- ['chat','visao','traducao','setup'].forEach(t=>$('#tab-'+t).classList.toggle('hidden', t!==btn.dataset.tab));
+function sys(t){ add("sys", t); }
+
+/* ---------- voz (saída) ---------- */
+let vozes=[];
+function carregaVozes(){ vozes=speechSynthesis.getVoices(); }
+carregaVozes(); speechSynthesis.onvoiceschanged=carregaVozes;
+function speak(txt, lang="pt-BR"){
+ if(!falar || !("speechSynthesis" in window)) return;
+ speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(txt);u.lang=lang;
+ const v=vozes.find(v=>v.lang.replace("_","-").startsWith(lang.split("-")[0]));
+ if(v) u.voice=v;
+ u.rate=1.02;
+ speechSynthesis.speak(u);
+}
+
+/* ---------- reconhecimento (entrada) ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function novoRec(continuo){
+ const r=new SR();
+ r.lang="pt-BR"; r.continuous=continuo; r.interimResults=true;
+ return r;
+}
+function pararRec(){
+ if(rec){ try{rec.onend=null; rec.stop();}catch(e){} rec=null; }
+ gravando=false; big.classList.remove("rec");
+}
+
+let interimEl=null;
+function iniciarRec(){
+ if(!SR){ sys("Este navegador não suporta reconhecimento de voz. Use o Safari."); return; }
+ speechSynthesis.cancel();
+ const continuo=(mode==="ouvir");
+ rec=novoRec(continuo);
+ let finalTxt="";
+ rec.onresult=e=>{
+ let interim="";
+ for(let i=e.resultIndex;i<e.results.length;i++){
+ const t=e.results[i][0].transcript;
+ if(e.results[i].isFinal) finalTxt+=t+" "; else interim+=t;
+ }
+ if(!interimEl){ interimEl=add("interim",""); }
+ interimEl.textContent=(finalTxt+interim).trim();
+ if(continuo) transcricao=finalTxt;
+ };
+ rec.onerror=e=>{
+ if(e.error==="not-allowed") sys("Permita o acesso ao microfone nos ajustes do Safari.");
+ pararRec();
+ };
+ rec.onend=()=>{
+ gravando=false; big.classList.remove("rec");
+ if(interimEl){ interimEl.remove(); interimEl=null; }
+ const dito=finalTxt.trim();
+ if(mode!=="ouvir" && dito) processa(dito);
+ else if(mode==="ouvir" && dito){ transcricao=dito; add("me","🗣️ "+dito); }
+ };
+ rec.start(); gravando=true; big.classList.add("rec");
+ hint.textContent = continuo ? "Ouvindo a conversa… toque de novo para pausar." : "Falando… toque para enviar.";
+}
+
+/* ---------- Claude ---------- */
+async function claude(msgs, sistema, maxTok=800){
+ const r=await fetch("https://api.anthropic.com/v1/messages",{
+ method:"POST", headers:{"Content-Type":"application/json"},
+ body:JSON.stringify({model:"claude-sonnet-4-6", max_tokens:maxTok, system:sistema, messages:msgs})
+ });
+ const d=await r.json();
+ if(d.error) throw new Error(d.error.message||"Erro na API");
+ return d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+}
+
+function nomeLang(){ const o=$("#lang").selectedOptions[0]; return o.dataset.nome; }
+
+async function processa(dito){
+ if(ocupado) return; ocupado=true;
+ add("me", dito);
+ const pensando=add("thinking","Claude está pensando…");
+ try{
+ let resp, langFala="pt-BR";
+ if(mode==="chat"){
+ historico.push({role:"user",content:dito});
+ resp=await claude(historico.slice(-16),
+ "Você é o Claude falando pelos alto-falantes de um óculos inteligente. Responda em português do Brasil, de forma natural, curta e clara (2 a 4 frases), como numa conversa falada. Sem listas, sem formatação.");
+ historico.push({role:"assistant",content:resp});
+ } else if(mode==="trad"){
+ langFala=$("#lang").value;
+ resp=await claude([{role:"user",content:dito}],
+ "Você é um tradutor simultâneo. Traduza a fala do usuário para "+nomeLang()+". Responda APENAS com a tradução, nada mais. Se a fala já estiver em "+nomeLang()+", traduza para português do Brasil.");
+ if(/[àáâãéêíóôõúç]|^(o|a|os|as|de|que)\s/i.test(resp)) langFala="pt-BR";
+ }
+ pensando.remove();
+ add("ai", resp, langFala);
+ speak(resp, langFala);
+ }catch(err){
+ pensando.remove();
+ sys("Falha ao falar com o Claude: "+err.message+". Verifique a internet e tente de novo.");
+ }
+ ocupado=false;
+}
+
+async function sugerir(){
+ if(!transcricao.trim()){ sys("Ainda não ouvi nada. Toque no microfone e deixe a conversa rolar."); return; }
+ if(ocupado) return; ocupado=true;
+ const pensando=add("thinking","Preparando sugestões…");
+ try{
+ const resp=await claude([{role:"user",content:"Transcrição do que a pessoa está me dizendo agora:\n\n"+transcricao}],
+ "Você ajuda o usuário a responder numa conversa ao vivo.Com base na transcrição, diga em 1 frase o ponto principal do que foi dito e sugira 2 respostas curtas e naturais em português do Brasil, numeradas 1 e 2. Seja breve: isso será lido em voz alta no ouvido do usuário.");
+ pensando.remove();
+ add("ai", resp, "pt-BR");
+ speak(resp,"pt-BR");
+ transcricao="";
+ }catch(err){ pensando.remove(); sys("Erro: "+err.message); }
+ ocupado=false;
+}
+
+/* ---------- câmera ---------- */
+$("#camIn").addEventListener("change", async e=>{
+ const f=e.target.files[0]; if(!f) return;
+ e.target.value="";
+ const b64=await comprime(f);
+ add("me","📷 Foto enviada");
+ const pensando=add("thinking","Lendo o texto da imagem…");
+ ocupado=true;
+ try{
+ const r=await fetch("https://api.anthropic.com/v1/messages",{
+ method:"POST", headers:{"Content-Type":"application/json"},
+ body:JSON.stringify({model:"claude-sonnet-4-6", max_tokens:1000,
+ system:"Leia o texto visível na imagem e traduza para português do Brasil. Responda apenas com a tradução, de forma corrida e natural para ser lida em voz alta. Se não houver texto, diga isso em uma frase.",
+ messages:[{role:"user",content:[
+ {type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
+ {type:"text",text:"Traduza o texto desta imagem."}]}]})
+ });
+ const d=await r.json();
+ if(d.error) throw new Error(d.error.message);
+ const resp=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
+ pensando.remove();
+ add("ai", resp, "pt-BR");
+ speak(resp,"pt-BR");
+ }catch(err){ pensando.remove(); sys("Erro ao ler a imagem: "+err.message); }
+ ocupado=false;
 });
-function answer(text){
- if(!text.trim()) return;
- addMsg(text,'me');
- const lower=text.toLowerCase();
- let reply='Entendi. Na versão final eu envio isso para Claude pelo backend seguro e respondo em tempo real.';
- if(lower.includes('traduz')) reply='Modo tradução: capto o áudio, transcrevo, traduzo para português brasileiro e posso falar no fone/óculos.';
- if(lower.includes('camera')||lower.includes('câmera')||lower.includes('ver')) reply='Modo visão: use a câmera do celular para capturar a cena; o backend descreve a imagem e devolve orientação curta.';
- setTimeout(()=>addMsg(reply,'ai'),300);
+
+function comprime(file){
+ return new Promise((res,rej)=>{
+ const img=new Image();
+ img.onload=()=>{
+ const max=1280, esc=Math.min(1, max/Math.max(img.width,img.height));
+ const c=document.createElement("canvas");
+ c.width=img.width*esc; c.height=img.height*esc;
+ c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+ res(c.toDataURL("image/jpeg",0.82).split(",")[1]);
+ };
+ img.onerror=rej;
+ img.src=URL.createObjectURL(file);
+ });
 }
-$('#send').onclick=()=>{answer($('#txt').value); $('#txt').value='';};
-$('#txt').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault(); $('#send').click();}});
-$('#big').onclick=()=>{
- const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SR){addMsg('Seu navegador não liberou reconhecimento de voz. Digite a pergunta ou use Chrome/Android.','ai'); return;}
- if(!recognition){recognition=new SR(); recognition.lang=$('#lang').value; recognition.interimResults=false; recognition.continuous=false; recognition.onresult=e=>answer(e.results[0][0].transcript); recognition.onend=()=>{listening=false; setStatus('Pronto',false);};}
- if(listening){recognition.stop(); return;}
- recognition.lang=$('#lang').value; listening=true; setStatus('Ouvindo...',true); recognition.start();
+
+/* ---------- controles ---------- */
+big.onclick=()=>{
+ if(mode==="cam"){ $("#camIn").click(); return; }
+ if(gravando){ rec && rec.stop(); }
+ else iniciarRec();
 };
-$('#cameraBtn').onclick=async()=>{
- try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false}); $('#video').srcObject=stream; setStatus('Câmera ativa');}
- catch(e){addMsg('Não consegui abrir a câmera: '+e.message,'ai');}
+$("#sugerir").onclick=sugerir;
+$("#clear").onclick=()=>{ log.innerHTML=""; historico=[]; transcricao=""; boasVindas(); };
+$("#mudo").onclick=()=>{
+ falar=!falar;
+ $("#mudo").textContent=falar?"🔊 Voz":"🔇 Mudo";
+ if(!falar) speechSynthesis.cancel();
 };
-$('#photoBtn').onclick=()=>{
- const v=$('#video'); if(!v.videoWidth){addMsg('Abra a câmera primeiro.','ai'); return;}
- const c=$('#shot'); c.width=v.videoWidth; c.height=v.videoHeight; c.getContext('2d').drawImage(v,0,0); c.classList.remove('hidden'); addMsg('Imagem capturada. Na versão final ela será enviada ao backend de visão.','ai');
+document.querySelectorAll("#tabs button").forEach(b=>{
+ b.onclick=()=>{
+ pararRec(); speechSynthesis.cancel();
+ document.querySelectorAll("#tabs button").forEach(x=>x.classList.remove("on"));
+ b.classList.add("on"); mode=b.dataset.m;
+ $("#opts").hidden=(mode!=="trad");
+ $("#sugerir").hidden=(mode!=="ouvir");
+ big.textContent = mode==="cam" ? "📷" : "🎙️";
+ dicas();
+ };
+});
+function dicas(){
+ const t={
+ chat:"Toque no microfone e converse com o Claude.",
+ trad:"Escolha o idioma, toque no microfone e fale — a tradução sai nos alto-falantes.",
+ ouvir:"Toque no microfone para ouvir a conversa. Depois toque em “Sugerir resposta”.",
+ cam:"Toque no botão para fotografar um texto com a câmera do iPhone."
+ };
+ hint.textContent=t[mode];
+}
+function boasVindas(){
+ sys("Óculos conectados por Bluetooth? Então o som já sai por eles. Escolha um modo acima.");
+}
+boasVindas(); dicas();
+
+/* ---------- painel inicial de autorização ---------- */
+const btnMic=$("#btnMic"), btnEntrar=$("#btnEntrar"), setupMsg=$("#setupMsg");
+function marca(id, txt){ const c=$(id); c.classList.add("ok"); c.querySelector(".st").textContent=txt; }
+
+btnMic.onclick=async ()=>{
+ setupMsg.textContent="";
+ try{
+ const u=new SpeechSynthesisUtterance(" "); u.volume=0; speechSynthesis.speak(u);
+ marca("#ckVoz","pronto ✓");
+ }catch(e){}
+ try{
+ const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+ stream.getTracks().forEach(t=>t.stop());
+ marca("#ckMic","autorizado ✓");marca("#ckBt","ok");
+ btnMic.textContent="Microfone autorizado ✓";
+ btnMic.disabled=true; btnMic.style.opacity=".5";
+ btnEntrar.disabled=false;
+ setupMsg.style.color="var(--accent)";
+ setupMsg.textContent="Tudo certo! Pode entrar.";
+ }catch(err){
+ if(err.name==="NotAllowedError"){
+ setupMsg.textContent="Permissão negada. Vá em Ajustes → Apps → Safari → Microfone → Permitir, e recarregue a página.";
+ } else if(err.name==="NotFoundError"){
+ setupMsg.textContent="Nenhum microfone encontrado. Verifique a conexão Bluetooth dos óculos.";
+ } else {
+ setupMsg.textContent="Não deu certo: "+err.message+". Se estiver no app do Claude, abra esta página no Safari.";
+ }
+ }
 };
-$('#translateDemo').onclick=()=>addMsg('Exemplo: “The meeting starts at nine” → “A reunião começa às nove.”','ai');
-$('#btBtn').onclick=async()=>{
- if(!navigator.bluetooth){addMsg('Bluetooth Web não está disponível neste navegador. Teste no Chrome/Android ou use pareamento pelo sistema.','ai'); return;}
- try{await navigator.bluetooth.requestDevice({acceptAllDevices:true}); addMsg('Dispositivo selecionado. A integração real depende do perfil/SDK do óculos.','ai');}
- catch(e){addMsg('Busca Bluetooth cancelada ou bloqueada.','ai');}
-};
-$('#wakeBtn').onclick=()=>{const u=new SpeechSynthesisUtterance('Lente pronto para ajudar.'); u.lang='pt-BR'; speechSynthesis.speak(u);};
+btnEntrar.onclick=()=>{ $("#setup").remove(); };
+btnEntrar.disabled=false;
+
+(async ()=>{
+ try{
+ const p=await navigator.permissions.query({name:"microphone"});
+ if(p.state==="granted"){
+ marca("#ckMic","autorizado ✓"); marca("#ckBt","ok");
+ btnMic.textContent="Microfone autorizado ✓";
+ setupMsg.style.color="var(--accent)";
+ setupMsg.textContent="Permissão já concedida. Toque em Entrar no app.";
+ }
+ }catch(e){}
+})();
 </script>
 </body>
 </html>
